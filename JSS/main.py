@@ -65,31 +65,24 @@ def train_func():
         'framework': 'tf',
         'log_level': 'WARN',
         'num_gpus': 1,
-        'instance_path': 'instances/ta41',
+        'instance_path': 'instances/ta52',
         'evaluation_interval': None,
         'metrics_smoothing_episodes': 2000,
         'gamma': 1.0,
         'num_workers': mp.cpu_count(),
-        'layer_nb': 2,
-        'train_batch_size': mp.cpu_count() * 4 * 704,
+        'train_batch_size':4000,
         'num_envs_per_worker': 4,
         'rollout_fragment_length': 704,  # TO TUNE
-        'sgd_minibatch_size': 33000,
-        'layer_size': 319,
-        'lr': 0.0006861,  # TO TUNE
-        'lr_start': 0.0006861,  # TO TUNE
-        'lr_end': 0.00007783,  # TO TUNE
-        'clip_param': 0.541,  # TO TUNE
-        'vf_clip_param': 26,  # TO TUNE
-        'num_sgd_iter': 12,  # TO TUNE
-        "vf_loss_coeff": 0.7918,
-        "kl_coeff": 0.496,
-        'kl_target': 0.05047,  # TO TUNE
+        'sgd_minibatch_size': 128,
+        'num_sgd_iter': 10,          # epochs
+	'clip_param': 0.5,
+        'vf_loss_coeff': 0.8,
+        'kl_coeff': 0.5,
         'lambda': 1.0,
-        'entropy_coeff': 0.0002458,  # TUNE LATER
-        'entropy_start': 0.0002458,
-        'entropy_end': 0.002042,
-        'entropy_coeff_schedule': None,
+        'entropy_start': 2.0e-3,
+        'entropy_end': 2.5e-4,
+        'lr_start': 6.6e-4,
+        'lr_end': 7.8e-5,
         "batch_mode": "truncate_episodes",
         "grad_clip": None,
         "use_critic": True,
@@ -114,7 +107,7 @@ def train_func():
     config['model'] = {
         "fcnet_activation": "relu",
         "custom_model": "fc_masked_model_tf",
-        'fcnet_hiddens': [config['layer_size'] for k in range(config['layer_nb'])],
+	"fcnet_hiddens": [256, 256],
         "vf_share_layers": False,
     }
     config['env_config'] = {
@@ -122,26 +115,28 @@ def train_func():
     }
 
     config = with_common_config(config)
-    config['seed'] = 0
     config['callbacks'] = CustomCallbacks
-    config['train_batch_size'] = config['sgd_minibatch_size']
+
 
     config['lr'] = config['lr_start']
-    config['lr_schedule'] = [[0, config['lr_start']], [15000000, config['lr_end']]]
+    config['lr_schedule'] = [
+        [0, config['lr_start']],
+        [1_000_000, config['lr_end']],
+    ]
 
     config['entropy_coeff'] = config['entropy_start']
-    config['entropy_coeff_schedule'] = [[0, config['entropy_start']], [15000000, config['entropy_end']]]
-
+    config['entropy_coeff_schedule'] = [
+        [0, config['entropy_start']],
+        [1_000_000, config['entropy_end']],
+    ]
     config.pop('instance_path', None)
-    config.pop('layer_size', None)
-    config.pop('layer_nb', None)
     config.pop('lr_start', None)
     config.pop('lr_end', None)
     config.pop('entropy_start', None)
     config.pop('entropy_end', None)
 
     stop = {
-        "time_total_s": 10 * 60,
+        "time_total_s": 200 * 60,
     }
 
     start_time = time.time()
@@ -151,8 +146,6 @@ def train_func():
         result = wandb_tune._clean_log(result)
         log, config_update = _handle_result(result)
         wandb.log(log)
-        # wandb.config.update(config_update, allow_val_change=True)
-    # trainer.export_policy_model("/home/jupyter/JSS/JSS/models/")
 
     ray.shutdown()
 
