@@ -31,7 +31,7 @@ INST_DIR = "instances"
 INSTANCES = ["ta42", "ta52", "ta62", "ta72"]
 BKS = {"ta42": 1939, "ta52": 2756, "ta62": 2869, "ta72": 5181}
 
-TRIALS = 10
+TRIALS = 3
 POP_SIZE = 100
 GENERATIONS = 100
 CROSSOVER_P = 0.9
@@ -45,7 +45,9 @@ SA_TEND = 1e-3
 MA_INTENSIFICATION_ON_OFFSPRING = True  # run SA on each offspring (MA)
 HGA_SA_FRACTION = 0.2   # fraction of population to apply SA to each generation (HGA)
 
-OUTPUT_DIR = "ma_hga_results"
+HILL_COEFFS = [1.0, 1.2, 1.5, 2.0, 2.5]   
+
+OUTPUT_DIR = "ma_hga_results_2"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def parse_taillard(path):
@@ -132,7 +134,7 @@ def tournament_select(pop, fitnesses, k=3):
 # Simulated Annealing local search (operates on permutations)
 # Small neighborhood: swap two positions, accept if better or by SA prob
 # ===========================
-def simulated_annealing_improve(jobs, perm, iters=1000, t0=1.0, tend=1e-3):
+def simulated_annealing_improve(jobs, perm, iters=SA_ITERS, T0=1.0, Tend=SA_TEND):
     best = perm[:]
     best_val = compute_makespan(jobs, best)
     cur = best[:]
@@ -158,7 +160,6 @@ def simulated_annealing_improve(jobs, perm, iters=1000, t0=1.0, tend=1e-3):
 # ===========================
 def run_GA(jobs, pop_size=100, generations=100, cross_p=0.9, mut_p=0.1, seed=None, verbose=False):
     random.seed(seed); np.random.seed(seed)
-    # initial population
     pop = [random_permutation(jobs) for _ in range(pop_size)]
     fitness = [compute_makespan(jobs, ind) for ind in pop]
     best_val = min(fitness); best_ind = deepcopy(pop[fitness.index(best_val)])
