@@ -4,13 +4,6 @@ run_ma_hga_taillard.py
 
 Run GA, MA (memetic = GA + local search), and HGA (GA + Simulated Annealing hybrid)
 on Taillard instances ta42, ta52, ta62, ta72. 10 trials per instance.
-
-Usage:
-    python3 run_ma_hga_taillard.py
-
-Requirements:
-    python3.8+ (numpy, pandas)
-
 Outputs:
     results_{alg}.csv for each algorithm with per-trial best makespans and gaps.
 """
@@ -31,7 +24,7 @@ INST_DIR = "instances"
 INSTANCES = ["ta42", "ta52", "ta62", "ta72"]
 BKS = {"ta42": 1939, "ta52": 2756, "ta62": 2869, "ta72": 5181}
 
-TRIALS = 10
+TRIALS = 3
 POP_SIZE = 100
 GENERATIONS = 100
 CROSSOVER_P = 0.9
@@ -40,12 +33,12 @@ TOURNAMENT_K = 3
 
 # Local search / SA params (used by MA and HGA)
 SA_ITERS = 2000
-SA_T0 = 1.0
+SA_T0 = 1.5
 SA_TEND = 1e-3
 MA_INTENSIFICATION_ON_OFFSPRING = True  # run SA on each offspring (MA)
 HGA_SA_FRACTION = 0.2   # fraction of population to apply SA to each generation (HGA)
 
-OUTPUT_DIR = "ma_hga_results"
+OUTPUT_DIR = "ma_hga_results_3_15"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def parse_taillard(path):
@@ -132,7 +125,7 @@ def tournament_select(pop, fitnesses, k=3):
 # Simulated Annealing local search (operates on permutations)
 # Small neighborhood: swap two positions, accept if better or by SA prob
 # ===========================
-def simulated_annealing_improve(jobs, perm, iters=1000, t0=1.0, tend=1e-3):
+def simulated_annealing_improve(jobs, perm, iters=1000, t0=SA_T0, tend=1e-3):
     best = perm[:]
     best_val = compute_makespan(jobs, best)
     cur = best[:]
@@ -153,9 +146,7 @@ def simulated_annealing_improve(jobs, perm, iters=1000, t0=1.0, tend=1e-3):
             cur[i], cur[j] = cur[j], cur[i]
     return best, best_val
 
-# ===========================
 # GA / MA / HGA main loops
-# ===========================
 def run_GA(jobs, pop_size=100, generations=100, cross_p=0.9, mut_p=0.1, seed=None, verbose=False):
     random.seed(seed); np.random.seed(seed)
     # initial population
@@ -250,9 +241,7 @@ def run_HGA(jobs, pop_size=100, generations=100, cross_p=0.9, mut_p=0.1, sa_frac
             print(f"HGA gen {gen} best {best_val}")
     return best_ind, best_val, best_iter
 
-# ===========================
 # Experiment driver
-# ===========================
 def run_trials_for_instance(inst_name, inst_file, alg_name, run_func, trials=10, params=None):
     jobs = parse_taillard(inst_file)
     out = []
