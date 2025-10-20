@@ -50,68 +50,70 @@ def _handle_result(result: Dict) -> Tuple[Dict, Dict]:
 
 def train_func():
     # ==== Choose algorithm: "PPO" or "SAC" ====
-    ALGORITHM = "SAC"  # change to "SAC" to run Soft Actor-Critic
+    ALGORITHM = "SAC"  # change to "PPO" or "SAC"
 
     instances = ["instances/ta42", "instances/ta52", "instances/ta62", "instances/ta72"]
 
-    # ==== Base configuration ====
-    default_config = {
-        'env': 'JSSEnv:jss-v1',
-        'seed': 0,
-        'framework': 'tf',
-        'log_level': 'WARN',
-        'evaluation_interval': None,
-        'metrics_smoothing_episodes': 2000,
-        'gamma': 1.0,
-        'num_workers': mp.cpu_count(),
-        'num_envs_per_worker': 4,
-        'batch_mode': "truncate_episodes",
-        'shuffle_sequences': True,
-        'observation_filter': "NoFilter",
-        'simple_optimizer': False,
-        '_fake_gpus': False,
-        'num_gpus': 1,
+    # ==== Shared Base configuration ====
+    base_config = {
+        "env": "JSSEnv:jss-v1",
+        "seed": 0,
+        "framework": "tf",
+        "log_level": "WARN",
+        "num_workers": min(mp.cpu_count(), 8),
+        "num_gpus": 1,
     }
 
-    # PPO-specific parameters
     if ALGORITHM == "PPO":
-        default_config.update({
-            'train_batch_size': 4000,
-            'rollout_fragment_length': 704,
-            'sgd_minibatch_size': 128,
-            'num_sgd_iter': 10,  # epochs
-            'clip_param': 0.5,
-            'vf_loss_coeff': 0.8,
-            'kl_coeff': 0.5,
-            'lambda': 1.0,
-            'entropy_start': 2.0e-3,
-            'entropy_end': 2.5e-4,
-            'lr_start': 6.6e-4,
-            'lr_end': 7.8e-5,
+        config = base_config.copy()
+        config.update({
+            "train_batch_size": 4000,
+            "rollout_fragment_length": 704,
+            "sgd_minibatch_size": 128,
+            "num_sgd_iter": 10,  # epochs
+            "clip_param": 0.5,
+            "vf_loss_coeff": 0.8,
+            "kl_coeff": 0.5,
+            "lambda": 1.0,
+            "entropy_start": 2.0e-3,
+            "entropy_end": 2.5e-4,
+            "lr_start": 6.6e-4,
+            "lr_end": 7.8e-5,
+            "gamma": 1.0,
+            "batch_mode": "truncate_episodes",
+            "shuffle_sequences": True,
+            "observation_filter": "NoFilter",
         })
-    elif ALGORITHM == "SAC":
-        # SAC typical parameters
-        default_config.update({
+    else:  # SAC configuration for Ray 1.1.0
+        config = base_config.copy()
+        config.update({
+            "gamma": 0.99,
             "tau": 0.005,
-            "train_batch_size": 256,
-            "target_entropy": "auto",
+            "train_batch_size": 2096,
+            "learning_starts": 1000,
+            "buffer_size": int(1e6),
+            "target_entropy": -3.0,   # must be numeric, not 'auto'
+            "use_state_preprocessor": False,
+            "no_done_at_end": False,
             "optimization": {
                 "actor_learning_rate": 3e-4,
                 "critic_learning_rate": 3e-4,
                 "entropy_learning_rate": 3e-4,
             },
+	    "Q_model": {
+                "fcnet_activation": "relu",
+                "fcnet_hiddens": [256, 256],
+            },
         })
-
-    wandb.init(project="JSS", config=default_config)
-    ray.init()
+    wandb.init(project="JSS", config=config)
+    ray.init(ignore_reinit_error=True)
     tf.random.set_seed(0)
     np.random.seed(0)
     random.seed(0)
 
-    config = wandb.config
     ModelCatalog.register_custom_model("fc_masked_model_tf", FCMaskedActionsModelTF)
 
-    config['model'] = {
+    config["model"] = {
         "fcnet_activation": "relu",
         "custom_model": "fc_masked_model_tf",
         "fcnet_hiddens": [256, 256],
@@ -119,37 +121,39 @@ def train_func():
     }
 
     config = with_common_config(config)
-    config['callbacks'] = CustomCallbacks
+    config["callbacks"] = CustomCallbacks
 
-    # PPO schedules
+    # PPO-specific learning rate + entropy schedules
     if ALGORITHM == "PPO":
-        config['lr'] = config['lr_start']
-        config['lr_schedule'] = [
-            [0, config['lr_start']],
-            [1_000_000, config['lr_end']],
+        config["lr"] = config["lr_start"]
+        config["lr_schedule"] = [
+            [0, config["lr_start"]],
+            [1_000_000, config["lr_end"]],
         ]
-        config['entropy_coeff'] = config['entropy_start']
-        config['entropy_coeff_schedule'] = [
-            [0, config['entropy_start']],
-            [1_000_000, config['entropy_end']],
+        config["entropy_coeff"] = config["entropy_start"]
+        config["entropy_coeff_schedule"] = [
+            [0, config["entropy_start"]],
+            [1_000_000, config["entropy_end"]],
         ]
 
-    stop = {"time_total_s": 200 * 60}  # 200 minutes per instance
+    stop = {"time_total_s": 180 * 60}  # 3 hours per instance
 
     for instance_path in instances:
-        print(f"\n=== Training on {instance_path} with {ALGORITHM} ===")
-        config['env_config'] = {'env_config': {'instance_path': instance_path}}
+        print(f"\n=== Training on {instance_path} using {ALGORITHM} ===")
+        config["env_config"] = {"env_config": {"instance_path": instance_path}}
 
-        trainer = PPOTrainer(config=config) if ALGORITHM == "PPO" else SACTrainer(config=config)
+        if ALGORITHM == "PPO":
+            trainer = PPOTrainer(config=config)
+        else:
+            trainer = SACTrainer(config=config)
 
         start_time = time.time()
-        while start_time + stop['time_total_s'] > time.time():
+        while time.time() - start_time < stop["time_total_s"]:
             result = trainer.train()
             result = wandb_tune._clean_log(result)
             log, config_update = _handle_result(result)
             wandb.log(log)
 
-        # save checkpoint
         checkpoint = trainer.save()
         print(f"Checkpoint saved for {instance_path}: {checkpoint}")
 
