@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 import math
 
-RUN_DIR = Path("ray_results/PPO_ta72")
+RUN_DIR = Path("ray_results/PPO_ta62")
 RESULTS = RUN_DIR / "result.json"
 
 # Best-known makespan for Taillard ta72
