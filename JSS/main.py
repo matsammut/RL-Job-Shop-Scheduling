@@ -1,5 +1,5 @@
 import time
-
+import argparse
 import ray
 import wandb
 
@@ -35,6 +35,11 @@ _config_results = [
 ]
 
 
+parser = argparse.ArgumentParser(description="Iteration-based PPO trainer for Taillard instances.")
+parser.add_argument("--instances", type=str, default="instances/ta52",help="Path to the Taillard instance directory or file.")
+parser.add_argument("--iters", type=int, default=200,help="Number of PPO training iterations.")
+args = parser.parse_args()
+
 def _handle_result(result: Dict) -> Tuple[Dict, Dict]:
     config_update = result.get("config", {}).copy()
     log = {}
@@ -58,14 +63,14 @@ def _handle_result(result: Dict) -> Tuple[Dict, Dict]:
     return log, config_update
 
 
-def train_func():
+def train_func(instance_path: str, num_iterations: int):
     default_config = {
         'env': 'JSSEnv:jss-v1',
         'seed': 0,
         'framework': 'tf',
         'log_level': 'WARN',
         'num_gpus': 1,
-        'instance_path': 'instances/ta52',
+        'instance_path': instance_path,
         'evaluation_interval': None,
         'metrics_smoothing_episodes': 2000,
         'gamma': 1.0,
@@ -135,20 +140,25 @@ def train_func():
     config.pop('entropy_start', None)
     config.pop('entropy_end', None)
 
-    stop = {
-        "time_total_s": 200 * 60,
-    }
-
-    start_time = time.time()
+    checkpoint_freq = 25
+    save_dir = "ppo_runs_11112025"
     trainer = PPOTrainer(config=config)
-    while start_time + stop['time_total_s'] > time.time():
+    print(f"Starting PPO training for {num_iterations} iterations on {instance_path}...")
+
+    for iteration in range(1, num_iterations + 1):
         result = trainer.train()
         result = wandb_tune._clean_log(result)
-        log, config_update = _handle_result(result)
+        log, _ = _handle_result(result)
         wandb.log(log)
+
+        ep_reward = result.get("episode_reward_mean", "N/A")
+        print(f"Iteration {iteration}/{num_iterations}: reward_mean={ep_reward}")
+
+        if checkpoint_freq > 0 and iteration % checkpoint_freq == 0:
+            ckpt_path = trainer.save(save_dir)
+            print(f"Checkpoint saved at iteration {iteration}: {ckpt_path}")
 
     ray.shutdown()
 
-
 if __name__ == "__main__":
-    train_func()
+	train_func(args.instances, args.iters)
