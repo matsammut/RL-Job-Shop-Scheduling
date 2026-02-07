@@ -38,6 +38,7 @@ _config_results = [
 parser = argparse.ArgumentParser(description="Iteration-based PPO trainer for Taillard instances.")
 parser.add_argument("--instances", type=str, default="instances/ta52",help="Path to the Taillard instance directory or file.")
 parser.add_argument("--iters", type=int, default=200,help="Number of PPO training iterations.")
+parser.add_argument("--out", type=str, default="checkpoint_results",help="Path to save the checkpoints to")
 args = parser.parse_args()
 
 def _handle_result(result: Dict) -> Tuple[Dict, Dict]:
@@ -63,7 +64,7 @@ def _handle_result(result: Dict) -> Tuple[Dict, Dict]:
     return log, config_update
 
 
-def train_func(instance_path: str, num_iterations: int):
+def train_func(instance_path: str, num_iterations: int, save_dir: str):
     default_config = {
         'env': 'JSSEnv:jss-v1',
         'seed': 0,
@@ -141,7 +142,6 @@ def train_func(instance_path: str, num_iterations: int):
     config.pop('entropy_end', None)
 
     checkpoint_freq = 25
-    save_dir = "ppo_runs_11112025"
     trainer = PPOTrainer(config=config)
     print(f"Starting PPO training for {num_iterations} iterations on {instance_path}...")
 
@@ -161,4 +161,4 @@ def train_func(instance_path: str, num_iterations: int):
     ray.shutdown()
 
 if __name__ == "__main__":
-	train_func(args.instances, args.iters)
+	train_func(args.instances, args.iters, args.out)
