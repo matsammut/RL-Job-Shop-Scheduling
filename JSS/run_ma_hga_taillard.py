@@ -38,13 +38,8 @@ SA_TEND = 1e-3
 MA_INTENSIFICATION_ON_OFFSPRING = True  # run SA on each offspring (MA)
 HGA_SA_FRACTION = 0.2   # fraction of population to apply SA to each generation (HGA)
 
-<<<<<<< HEAD
-OUTPUT_DIR = "ma_hga_results_3_15"
-=======
+OUTPUT_DIR = "ma_hga_results_07022026"
 HILL_COEFFS = [1.0, 1.2, 1.5, 2.0, 2.5]   
-
-OUTPUT_DIR = "ma_hga_results_2"
->>>>>>> 6b66644ea89e6795078cc519ae22b2e3b1108b8c
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def parse_taillard(path):
@@ -131,11 +126,7 @@ def tournament_select(pop, fitnesses, k=3):
 # Simulated Annealing local search (operates on permutations)
 # Small neighborhood: swap two positions, accept if better or by SA prob
 # ===========================
-<<<<<<< HEAD
-def simulated_annealing_improve(jobs, perm, iters=1000, t0=SA_T0, tend=1e-3):
-=======
-def simulated_annealing_improve(jobs, perm, iters=SA_ITERS, T0=1.0, Tend=SA_TEND):
->>>>>>> 6b66644ea89e6795078cc519ae22b2e3b1108b8c
+def simulated_annealing_improve(jobs, perm, iters=1000, t0=1.0, tend=1e-3):
     best = perm[:]
     best_val = compute_makespan(jobs, best)
     cur = best[:]
@@ -215,12 +206,16 @@ def run_MA(jobs, pop_size=100, generations=100, cross_p=0.9, mut_p=0.1, sa_iters
             print(f"MA gen {gen} best {best_val}")
     return best_ind, best_val, best_iter
 
-def run_HGA(jobs, pop_size=100, generations=100, cross_p=0.9, mut_p=0.1, sa_fraction=0.2, sa_iters=500, seed=None, verbose=False):
+def run_HGA(jobs,target, pop_size=100, generations=100, cross_p=0.9, mut_p=0.1, sa_fraction=0.2, sa_iters=500, seed=None, verbose=False):
     # HGA: GA but run SA on the top fraction each generation (intensification)
     random.seed(seed); np.random.seed(seed)
     pop = [random_permutation(jobs) for _ in range(pop_size)]
     fitness = [compute_makespan(jobs, ind) for ind in pop]
     best_val = min(fitness); best_ind = deepcopy(pop[fitness.index(best_val)])
+
+    patience = 30
+    no_imp_count = 0
+    start_time = time.time()
     best_iter = 0
     for gen in range(1, generations+1):
         new_pop = []
@@ -234,22 +229,32 @@ def run_HGA(jobs, pop_size=100, generations=100, cross_p=0.9, mut_p=0.1, sa_frac
         # apply SA on top fraction of population (sorted by fitness)
         pop = new_pop
         fitness = [compute_makespan(jobs, ind) for ind in pop]
-        # sort indices by fitness
-        idx_sorted = sorted(range(len(pop)), key=lambda i: fitness[i])
-        topk = max(1, int(sa_fraction * pop_size))
-        for i in idx_sorted[:topk]:
-            improved, val = simulated_annealing_improve(jobs, pop[i], iters=sa_iters, t0=SA_T0, tend=SA_TEND)
-            pop[i] = improved
-            fitness[i] = val
+        
+        if no_imp_count >= 5: 
+            idx_sorted = sorted(range(len(pop)), key=lambda i: fitness[i])
+            topk = max(1, int(sa_fraction * pop_size))
+            for i in idx_sorted[:topk]:
+                # Using parameters from your original file
+                improved, val = simulated_annealing_improve(jobs, pop[i], iters=sa_iters)
+                pop[i] = improved
+                fitness[i] = val
+        
         gen_best = min(fitness)
         if gen_best < best_val:
             best_val = gen_best
             best_ind = deepcopy(pop[fitness.index(gen_best)])
-            best_iter = gen
-        if verbose and gen % 10 == 0:
-            print(f"HGA gen {gen} best {best_val}")
-    return best_ind, best_val, best_iter
+            no_imp_count = 0 # Reset
+        else:
+            no_imp_count += 1
+# 4. Target Check (PPO Exit)
+        if best_val <= target:
+            return {"best_makespan": best_val, "time": time.time() - start_time, "status": "Success"}
 
+        # 5. EARLY STAGNATION EXIT
+        if no_imp_count >= patience:
+            return {"best_makespan": best_val, "time": time.time() - start_time, "status": "DNF"}
+
+    return {"best_makespan": best_val, "time": time.time() - start_time, "status": "DNF"}
 # Experiment driver
 def run_trials_for_instance(inst_name, inst_file, alg_name, run_func, trials=10, params=None):
     jobs = parse_taillard(inst_file)
