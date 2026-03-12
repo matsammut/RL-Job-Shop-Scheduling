@@ -33,8 +33,8 @@ def load_ppo_model(checkpoint_path, params_path):
     return trainer
 
 # Paths based on your image
-checkpoint_path = "checkpoint-300"
-params_path = "PPO_42_27012026/params.json"
+checkpoint_path = "PPO_ta42_checkpoint_07032026/final_checkpoint/final-checkpoint"
+params_path = "PPO_ta42_checkpoint_07032026/params.json"
 
 ppo_trainer = load_ppo_model(checkpoint_path, params_path)
 
@@ -83,5 +83,11 @@ def evaluate_node(node, n_mcts_model):
     return priors, value
 
 # Call the solver
-final_env = solve_taillard("instances/ta42", n_mcts_model, n_mcts_sims=350)
-print(f"Final Makespan: {final_env.get_makespan()}")
+iterations=5000
+final_env = solve_taillard("instances/ta41", n_mcts_model, iterations)
+makespan = final_env.get_makespan()
+
+with open("logs.txt", "a") as f:
+    f.write(f"Final Makespan: {makespan}\n")
+print(f"Final Makespan: {makespan}")
+torch.save(n_mcts_model.state_dict(), "best_model_ta41.pth")

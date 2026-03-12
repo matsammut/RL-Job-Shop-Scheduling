@@ -40,14 +40,14 @@ from default_config import load_taillard_instance
 #    plt.show()
 
 
-def solve_taillard(instance_path, model, n_mcts_sims=50):
+def solve_taillard(instance_path, model, n_mcts_sims):
     proc_times, machine_seq, n_jobs, n_m = load_taillard_instance(instance_path)
     env = JSSPEnv(instance_path)
     mcts = MCTS(model, env)
     
     current_state = env.reset()
     while not env.done:
-        root = mcts.search(current_state, n_iterations=n_mcts_sims)
+        root = mcts.search(current_state, n_mcts_sims)
         best_action = max(root.children.items(), key=lambda item: item[1].visit_count)[0]
         current_state, _ = env.step(best_action)
     

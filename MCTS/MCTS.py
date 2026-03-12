@@ -4,12 +4,12 @@ import torch
 from MCTSNode import MCTSNode
 
 class MCTS:
-    def __init__(self, model, env, c_puct=1.0):
+    def __init__(self, model, env, c_puct=0.2):
         self.model = model
         self.env = env
         self.c_puct = c_puct
 
-    def search(self, root_state, n_iterations=100):
+    def search(self, root_state, n_iterations):
         # root_state is the dict from JSSPEnv.reset()
         root = MCTSNode(root_state)
         
@@ -55,6 +55,11 @@ class MCTS:
             
         return root
 
-    def calculate_reward(self, makespan):
+#    def calculate_reward(self, makespan):
         # Standardize reward for MCTS: smaller makespan = higher reward
-        return 1000.0 / max(makespan, 1)
+#        return 1000.0 / max(makespan, 1)
+    def calculate_reward(self, makespan):
+    # k is a sensitivity parameter. 
+    # Try values between 0.001 and 0.01 depending on your makespan range.
+        k = 0.005 
+        return np.exp(-k * (makespan - 1926)) # 1926 is the BKS for ta41
